@@ -73,6 +73,25 @@ func createBidLessThan2() domain.Bid {
 	}
 }
 
+// Test fixture for auction state tests
+type auctionStateTestFixture struct {
+	auction domain.Auction
+	state   domain.State
+	bid1    domain.Bid
+	bid2    domain.Bid
+}
+
+// Create a new test fixture for the given auction type
+func newAuctionStateTestFixture(auctionType domain.AuctionType) auctionStateTestFixture {
+	auction := sampleAuctionOfType(auctionType)
+	return auctionStateTestFixture{
+		auction: auction,
+		state:   auction.CreateEmptyState(),
+		bid1:    createBid1(),
+		bid2:    createBid2(),
+	}
+}
+
 // Common state increment tests
 func testStateIncrement(t *testing.T, state domain.State) {
 	t.Run("IncrementTwice", func(t *testing.T) {
@@ -116,15 +135,10 @@ func testStateIncrement(t *testing.T, state domain.State) {
 	})
 }
 
-// Test blind auction
-func TestBlindAuctionState(t *testing.T) {
-	blindAuction := sampleAuctionOfType(domain.NewSingleSealedBidType(domain.Blind))
-	emptyBlindAuctionState := blindAuction.CreateEmptyState()
-	bid1 := createBid1()
-	bid2 := createBid2()
-
+// Common tests for sealed bid auctions (both Blind and Vickrey)
+func testSealedBidAuction(t *testing.T, fixture auctionStateTestFixture, expectedWinningAmount domain.Amount) {
 	t.Run("CanAddBidToEmptyState", func(t *testing.T) {
-		stateWith1Bid, err := emptyBlindAuctionState.AddBid(bid1)
+		stateWith1Bid, err := fixture.state.AddBid(fixture.bid1)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -137,8 +151,8 @@ func TestBlindAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanAddSecondBid", func(t *testing.T) {
-		stateWith1Bid, _ := emptyBlindAuctionState.AddBid(bid1)
-		stateWith2Bids, err := stateWith1Bid.AddBid(bid2)
+		stateWith1Bid, _ := fixture.state.AddBid(fixture.bid1)
+		stateWith2Bids, err := stateWith1Bid.AddBid(fixture.bid2)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -151,8 +165,8 @@ func TestBlindAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanEnd", func(t *testing.T) {
-		stateWith1Bid, _ := emptyBlindAuctionState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
+		stateWith1Bid, _ := fixture.state.AddBid(fixture.bid1)
+		stateWith2Bids, _ := stateWith1Bid.AddBid(fixture.bid2)
 		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt)
 
 		// Check that the auction has ended
@@ -168,16 +182,16 @@ func TestBlindAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanGetWinnerAndPriceFromEndedAuction", func(t *testing.T) {
-		stateWith1Bid, _ := emptyBlindAuctionState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
+		stateWith1Bid, _ := fixture.state.AddBid(fixture.bid1)
+		stateWith2Bids, _ := stateWith1Bid.AddBid(fixture.bid2)
 		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt)
 
 		amount, winner, found := stateEndedAfterTwoBids.TryGetAmountAndWinner()
 		if !found {
 			t.Errorf("Expected to find winner and price")
 		}
-		if amount != bidAmount2 {
-			t.Errorf("Expected winning amount to be %v, got %v", bidAmount2, amount)
+		if amount != expectedWinningAmount {
+			t.Errorf("Expected winning amount to be %v, got %v", expectedWinningAmount, amount)
 		}
 		if winner != buyer2.ID {
 			t.Errorf("Expected winner to be %s, got %s", buyer2.ID, winner)
@@ -185,92 +199,39 @@ func TestBlindAuctionState(t *testing.T) {
 	})
 
 	// Run common increment tests
-	testStateIncrement(t, emptyBlindAuctionState)
+	testStateIncrement(t, fixture.state)
+}
+
+// Test blind auction
+func TestBlindAuctionState(t *testing.T) {
+	fixture := newAuctionStateTestFixture(domain.NewSingleSealedBidType(domain.Blind))
+	// In Blind auctions, the highest bidder wins and pays their bid
+	testSealedBidAuction(t, fixture, bidAmount2)
 }
 
 // Test Vickrey auction
 func TestVickreyAuctionState(t *testing.T) {
-	vickreyAuction := sampleAuctionOfType(domain.NewSingleSealedBidType(domain.Vickrey))
-	emptyVickreyAuctionState := vickreyAuction.CreateEmptyState()
-	bid1 := createBid1()
-	bid2 := createBid2()
-
-	// Run tests
-	t.Run("CanAddBidToEmptyState", func(t *testing.T) {
-		stateWith1Bid, err := emptyVickreyAuctionState.AddBid(bid1)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		// Check that the bid was added
-		bids := stateWith1Bid.GetBids()
-		if len(bids) != 1 {
-			t.Errorf("Expected 1 bid, got %d", len(bids))
-		}
-	})
-
-	t.Run("CanAddSecondBid", func(t *testing.T) {
-		stateWith1Bid, _ := emptyVickreyAuctionState.AddBid(bid1)
-		stateWith2Bids, err := stateWith1Bid.AddBid(bid2)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		}
-
-		// Check that the second bid was added
-		bids := stateWith2Bids.GetBids()
-		if len(bids) != 2 {
-			t.Errorf("Expected 2 bids, got %d", len(bids))
-		}
-	})
-
-	t.Run("CanEnd", func(t *testing.T) {
-		stateWith1Bid, _ := emptyVickreyAuctionState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
-		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt)
-
-		// Check that the auction has ended
-		if !stateEndedAfterTwoBids.HasEnded() {
-			t.Errorf("Expected auction to have ended")
-		}
-	})
-
-	t.Run("CanGetWinnerAndPriceFromEndedAuction", func(t *testing.T) {
-		stateWith1Bid, _ := emptyVickreyAuctionState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
-		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt)
-
-		amount, winner, found := stateEndedAfterTwoBids.TryGetAmountAndWinner()
-		if !found {
-			t.Errorf("Expected to find winner and price")
-		}
-
-		// In Vickrey auctions, the highest bidder wins but pays the second-highest bid
-		if amount != bidAmount1 {
-			t.Errorf("Expected winning amount to be %v (second-highest bid), got %v", bidAmount1, amount)
-		}
-		if winner != buyer2.ID {
-			t.Errorf("Expected winner to be %s, got %s", buyer2.ID, winner)
-		}
-	})
-
-	// Run common increment tests
-	testStateIncrement(t, emptyVickreyAuctionState)
+	fixture := newAuctionStateTestFixture(domain.NewSingleSealedBidType(domain.Vickrey))
+	// In Vickrey auctions, the highest bidder wins but pays the second-highest bid
+	testSealedBidAuction(t, fixture, bidAmount1)
 }
 
 // Test timed ascending (English) auction
 func TestTimedAscendingAuctionState(t *testing.T) {
 	options := domain.DefaultTimedAscendingOptions(domain.SEK)
-	timedAscAuction := sampleAuctionOfType(domain.NewTimedAscendingType(options))
-	emptyAscAuctionState := timedAscAuction.CreateEmptyState()
-	bid1 := createBid1()
-	bid2 := createBid2()
+	fixture := newAuctionStateTestFixture(domain.NewTimedAscendingType(options))
 	bidLessThan2 := createBidLessThan2()
+
+	// Helper function to get an active state (past the AwaitingStart state)
+	getActiveState := func() domain.State {
+		return fixture.state.Increment(sampleStartsAt.Add(time.Second))
+	}
 
 	t.Run("CanAddBidToEmptyState", func(t *testing.T) {
 		// First we need to get out of the AwaitingStart state
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
+		activeState := getActiveState()
 
-		stateWith1Bid, err := activeState.AddBid(bid1)
+		stateWith1Bid, err := activeState.AddBid(fixture.bid1)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -283,9 +244,9 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanAddSecondBid", func(t *testing.T) {
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
-		stateWith1Bid, _ := activeState.AddBid(bid1)
-		stateWith2Bids, err := stateWith1Bid.AddBid(bid2)
+		activeState := getActiveState()
+		stateWith1Bid, _ := activeState.AddBid(fixture.bid1)
+		stateWith2Bids, err := stateWith1Bid.AddBid(fixture.bid2)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -298,7 +259,7 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanEnd", func(t *testing.T) {
-		endedState := emptyAscAuctionState.Increment(sampleEndsAt.Add(time.Second))
+		endedState := fixture.state.Increment(sampleEndsAt.Add(time.Second))
 
 		// Check that the auction has ended
 		if !endedState.HasEnded() {
@@ -307,9 +268,9 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("EndedWithTwoBids", func(t *testing.T) {
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
-		stateWith1Bid, _ := activeState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
+		activeState := getActiveState()
+		stateWith1Bid, _ := activeState.AddBid(fixture.bid1)
+		stateWith2Bids, _ := stateWith1Bid.AddBid(fixture.bid2)
 		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt.Add(time.Second))
 
 		// Check that the auction has ended
@@ -325,11 +286,11 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("CannotBidAfterAuctionHasEnded", func(t *testing.T) {
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
-		stateWith1Bid, _ := activeState.AddBid(bid1)
+		activeState := getActiveState()
+		stateWith1Bid, _ := activeState.AddBid(fixture.bid1)
 		stateEndedAfter1Bid := stateWith1Bid.Increment(sampleEndsAt.Add(time.Second))
 
-		_, err := stateEndedAfter1Bid.AddBid(bid2)
+		_, err := stateEndedAfter1Bid.AddBid(fixture.bid2)
 		if err == nil {
 			t.Errorf("Expected error when bidding on ended auction")
 		}
@@ -341,9 +302,9 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("CanGetWinnerAndPriceFromEndedAuction", func(t *testing.T) {
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
-		stateWith1Bid, _ := activeState.AddBid(bid1)
-		stateWith2Bids, _ := stateWith1Bid.AddBid(bid2)
+		activeState := getActiveState()
+		stateWith1Bid, _ := activeState.AddBid(fixture.bid1)
+		stateWith2Bids, _ := stateWith1Bid.AddBid(fixture.bid2)
 		stateEndedAfterTwoBids := stateWith2Bids.Increment(sampleEndsAt.Add(time.Second))
 
 		amount, winner, found := stateEndedAfterTwoBids.TryGetAmountAndWinner()
@@ -361,8 +322,8 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 	})
 
 	t.Run("CannotPlaceBidLowerThanHighestBid", func(t *testing.T) {
-		activeState := emptyAscAuctionState.Increment(sampleStartsAt.Add(time.Second))
-		stateWith1Bid, _ := activeState.AddBid(bid2) // Higher bid first
+		activeState := getActiveState()
+		stateWith1Bid, _ := activeState.AddBid(fixture.bid2) // Higher bid first
 
 		_, err := stateWith1Bid.AddBid(bidLessThan2) // Lower bid after
 		if err == nil {
@@ -377,152 +338,167 @@ func TestTimedAscendingAuctionState(t *testing.T) {
 
 	// Test reservation price
 	t.Run("ReservePriceWorks", func(t *testing.T) {
-		// Create an auction with a reserve price
-		reserveOptions := domain.TimedAscendingOptions{
-			ReservePrice: domain.Amount{Currency: domain.SEK, Value: 15},
-			MinRaise:     domain.Amount{Currency: domain.SEK, Value: 0},
-			TimeFrame:    0,
-		}
-
-		reserveAuction := sampleAuctionOfType(domain.NewTimedAscendingType(reserveOptions))
-		reserveState := reserveAuction.CreateEmptyState()
-
-		// Activate auction
-		activeState := reserveState.Increment(sampleStartsAt.Add(time.Second))
-
-		// Add a bid below reserve price
-		stateWith1Bid, _ := activeState.AddBid(bid2) // bid2 has value 12, below reserve of 15
-		stateEndedAfter1Bid := stateWith1Bid.Increment(sampleEndsAt.Add(time.Second))
-
-		// Should not have a winner since bid is below reserve
-		_, _, found := stateEndedAfter1Bid.TryGetAmountAndWinner()
-		if found {
-			t.Errorf("Expected no winner when highest bid is below reserve price")
-		}
-
-		// Now add a bid above reserve price
-		highBid := domain.Bid{
-			ForAuction: sampleAuctionId,
-			Bidder:     buyer3,
-			At:         sampleStartsAt.Add(3 * time.Second),
-			Amount:     domain.Amount{Currency: domain.SEK, Value: 20},
-		}
-
-		// Start with a fresh state
-		activeState = reserveState.Increment(sampleStartsAt.Add(time.Second))
-		stateWithHighBid, _ := activeState.AddBid(highBid)
-		stateEndedAfterHighBid := stateWithHighBid.Increment(sampleEndsAt.Add(time.Second))
-
-		// Should have a winner since bid is above reserve
-		amount, winner, found := stateEndedAfterHighBid.TryGetAmountAndWinner()
-		if !found {
-			t.Errorf("Expected to find winner when highest bid is above reserve price")
-		}
-
-		if amount.Value != 20 {
-			t.Errorf("Expected winning amount to be 20, got %v", amount.Value)
-		}
-
-		if winner != buyer3.ID {
-			t.Errorf("Expected winner to be %s, got %s", buyer3.ID, winner)
-		}
+		testReservePriceForTimedAscending(t)
 	})
 
 	// Test minimum raise
 	t.Run("MinimumRaiseWorks", func(t *testing.T) {
-		// Create an auction with a minimum raise requirement
-		minRaiseOptions := domain.TimedAscendingOptions{
-			ReservePrice: domain.Amount{Currency: domain.SEK, Value: 0},
-			MinRaise:     domain.Amount{Currency: domain.SEK, Value: 5},
-			TimeFrame:    0,
-		}
-
-		minRaiseAuction := sampleAuctionOfType(domain.NewTimedAscendingType(minRaiseOptions))
-		minRaiseState := minRaiseAuction.CreateEmptyState()
-
-		// Activate auction
-		activeState := minRaiseState.Increment(sampleStartsAt.Add(time.Second))
-
-		// Add first bid
-		stateWith1Bid, _ := activeState.AddBid(bid1) // bid1 has value 10
-
-		// Try to add a second bid that doesn't meet minimum raise
-		smallRaiseBid := domain.Bid{
-			ForAuction: sampleAuctionId,
-			Bidder:     buyer2,
-			At:         sampleStartsAt.Add(2 * time.Second),
-			Amount:     domain.Amount{Currency: domain.SEK, Value: 14}, // Only 4 more than bid1
-		}
-
-		_, err := stateWith1Bid.AddBid(smallRaiseBid)
-		if err == nil {
-			t.Errorf("Expected error when bid doesn't meet minimum raise")
-		}
-
-		// Now try with a bid that does meet the minimum raise
-		goodRaiseBid := domain.Bid{
-			ForAuction: sampleAuctionId,
-			Bidder:     buyer2,
-			At:         sampleStartsAt.Add(2 * time.Second),
-			Amount:     domain.Amount{Currency: domain.SEK, Value: 15}, // 5 more than bid1
-		}
-
-		stateWith2Bids, err := stateWith1Bid.AddBid(goodRaiseBid)
-		if err != nil {
-			t.Errorf("Expected no error when bid meets minimum raise, got %v", err)
-		}
-
-		bids := stateWith2Bids.GetBids()
-		if len(bids) != 2 {
-			t.Errorf("Expected 2 bids, got %d", len(bids))
-		}
-
-		if bids[0].Amount.Value != 15 {
-			t.Errorf("Expected highest bid to be 15, got %v", bids[0].Amount.Value)
-		}
+		testMinimumRaiseForTimedAscending(t)
 	})
 
 	// Test time frame extension
 	t.Run("TimeFrameWorks", func(t *testing.T) {
-		// Create an auction with a time frame
-		timeFrameOptions := domain.TimedAscendingOptions{
-			ReservePrice: domain.Amount{Currency: domain.SEK, Value: 0},
-			MinRaise:     domain.Amount{Currency: domain.SEK, Value: 0},
-			TimeFrame:    10 * time.Minute,
-		}
-
-		timeFrameAuction := sampleAuctionOfType(domain.NewTimedAscendingType(timeFrameOptions))
-		timeFrameState := timeFrameAuction.CreateEmptyState()
-
-		// Activate auction
-		activeState := timeFrameState.Increment(sampleStartsAt.Add(time.Second))
-
-		// Add a bid 5 minutes before the end
-		bidTime := sampleEndsAt.Add(-5 * time.Minute)
-		lateBid := domain.Bid{
-			ForAuction: sampleAuctionId,
-			Bidder:     buyer1,
-			At:         bidTime,
-			Amount:     domain.Amount{Currency: domain.SEK, Value: 10},
-		}
-
-		stateWithLateBid, _ := activeState.AddBid(lateBid)
-
-		// The auction should not have ended right at the original end time
-		stateAtOriginalEnd := stateWithLateBid.Increment(sampleEndsAt)
-		if stateAtOriginalEnd.HasEnded() {
-			t.Errorf("Expected auction not to have ended at original end time after a late bid")
-		}
-
-		// But it should end after the time frame has elapsed from the last bid
-		stateAfterTimeFrame := stateWithLateBid.Increment(bidTime.Add(timeFrameOptions.TimeFrame).Add(time.Second))
-		if !stateAfterTimeFrame.HasEnded() {
-			t.Errorf("Expected auction to have ended after time frame elapsed from last bid")
-		}
+		testTimeFrameForTimedAscending(t)
 	})
 
 	// Run common increment tests
-	testStateIncrement(t, emptyAscAuctionState)
+	testStateIncrement(t, fixture.state)
+}
+
+// Helper function to test reserve price for timed ascending auctions
+func testReservePriceForTimedAscending(t *testing.T) {
+	// Create an auction with a reserve price
+	reserveOptions := domain.TimedAscendingOptions{
+		ReservePrice: domain.Amount{Currency: domain.SEK, Value: 15},
+		MinRaise:     domain.Amount{Currency: domain.SEK, Value: 0},
+		TimeFrame:    0,
+	}
+
+	reserveAuction := sampleAuctionOfType(domain.NewTimedAscendingType(reserveOptions))
+	reserveState := reserveAuction.CreateEmptyState()
+
+	// Activate auction
+	activeState := reserveState.Increment(sampleStartsAt.Add(time.Second))
+
+	// Add a bid below reserve price
+	stateWith1Bid, _ := activeState.AddBid(createBid2()) // bid2 has value 12, below reserve of 15
+	stateEndedAfter1Bid := stateWith1Bid.Increment(sampleEndsAt.Add(time.Second))
+
+	// Should not have a winner since bid is below reserve
+	_, _, found := stateEndedAfter1Bid.TryGetAmountAndWinner()
+	if found {
+		t.Errorf("Expected no winner when highest bid is below reserve price")
+	}
+
+	// Now add a bid above reserve price
+	highBid := domain.Bid{
+		ForAuction: sampleAuctionId,
+		Bidder:     buyer3,
+		At:         sampleStartsAt.Add(3 * time.Second),
+		Amount:     domain.Amount{Currency: domain.SEK, Value: 20},
+	}
+
+	// Start with a fresh state
+	activeState = reserveState.Increment(sampleStartsAt.Add(time.Second))
+	stateWithHighBid, _ := activeState.AddBid(highBid)
+	stateEndedAfterHighBid := stateWithHighBid.Increment(sampleEndsAt.Add(time.Second))
+
+	// Should have a winner since bid is above reserve
+	amount, winner, found := stateEndedAfterHighBid.TryGetAmountAndWinner()
+	if !found {
+		t.Errorf("Expected to find winner when highest bid is above reserve price")
+	}
+
+	if amount.Value != 20 {
+		t.Errorf("Expected winning amount to be 20, got %v", amount.Value)
+	}
+
+	if winner != buyer3.ID {
+		t.Errorf("Expected winner to be %s, got %s", buyer3.ID, winner)
+	}
+}
+
+// Helper function to test minimum raise for timed ascending auctions
+func testMinimumRaiseForTimedAscending(t *testing.T) {
+	// Create an auction with a minimum raise requirement
+	minRaiseOptions := domain.TimedAscendingOptions{
+		ReservePrice: domain.Amount{Currency: domain.SEK, Value: 0},
+		MinRaise:     domain.Amount{Currency: domain.SEK, Value: 5},
+		TimeFrame:    0,
+	}
+
+	minRaiseAuction := sampleAuctionOfType(domain.NewTimedAscendingType(minRaiseOptions))
+	minRaiseState := minRaiseAuction.CreateEmptyState()
+
+	// Activate auction
+	activeState := minRaiseState.Increment(sampleStartsAt.Add(time.Second))
+
+	// Add first bid
+	stateWith1Bid, _ := activeState.AddBid(createBid1()) // bid1 has value 10
+
+	// Try to add a second bid that doesn't meet minimum raise
+	smallRaiseBid := domain.Bid{
+		ForAuction: sampleAuctionId,
+		Bidder:     buyer2,
+		At:         sampleStartsAt.Add(2 * time.Second),
+		Amount:     domain.Amount{Currency: domain.SEK, Value: 14}, // Only 4 more than bid1
+	}
+
+	_, err := stateWith1Bid.AddBid(smallRaiseBid)
+	if err == nil {
+		t.Errorf("Expected error when bid doesn't meet minimum raise")
+	}
+
+	// Now try with a bid that does meet the minimum raise
+	goodRaiseBid := domain.Bid{
+		ForAuction: sampleAuctionId,
+		Bidder:     buyer2,
+		At:         sampleStartsAt.Add(2 * time.Second),
+		Amount:     domain.Amount{Currency: domain.SEK, Value: 15}, // 5 more than bid1
+	}
+
+	stateWith2Bids, err := stateWith1Bid.AddBid(goodRaiseBid)
+	if err != nil {
+		t.Errorf("Expected no error when bid meets minimum raise, got %v", err)
+	}
+
+	bids := stateWith2Bids.GetBids()
+	if len(bids) != 2 {
+		t.Errorf("Expected 2 bids, got %d", len(bids))
+	}
+
+	if bids[0].Amount.Value != 15 {
+		t.Errorf("Expected highest bid to be 15, got %v", bids[0].Amount.Value)
+	}
+}
+
+// Helper function to test time frame for timed ascending auctions
+func testTimeFrameForTimedAscending(t *testing.T) {
+	// Create an auction with a time frame
+	timeFrameOptions := domain.TimedAscendingOptions{
+		ReservePrice: domain.Amount{Currency: domain.SEK, Value: 0},
+		MinRaise:     domain.Amount{Currency: domain.SEK, Value: 0},
+		TimeFrame:    10 * time.Minute,
+	}
+
+	timeFrameAuction := sampleAuctionOfType(domain.NewTimedAscendingType(timeFrameOptions))
+	timeFrameState := timeFrameAuction.CreateEmptyState()
+
+	// Activate auction
+	activeState := timeFrameState.Increment(sampleStartsAt.Add(time.Second))
+
+	// Add a bid 5 minutes before the end
+	bidTime := sampleEndsAt.Add(-5 * time.Minute)
+	lateBid := domain.Bid{
+		ForAuction: sampleAuctionId,
+		Bidder:     buyer1,
+		At:         bidTime,
+		Amount:     domain.Amount{Currency: domain.SEK, Value: 10},
+	}
+
+	stateWithLateBid, _ := activeState.AddBid(lateBid)
+
+	// The auction should not have ended right at the original end time
+	stateAtOriginalEnd := stateWithLateBid.Increment(sampleEndsAt)
+	if stateAtOriginalEnd.HasEnded() {
+		t.Errorf("Expected auction not to have ended at original end time after a late bid")
+	}
+
+	// But it should end after the time frame has elapsed from the last bid
+	stateAfterTimeFrame := stateWithLateBid.Increment(bidTime.Add(timeFrameOptions.TimeFrame).Add(time.Second))
+	if !stateAfterTimeFrame.HasEnded() {
+		t.Errorf("Expected auction to have ended after time frame elapsed from last bid")
+	}
 }
 
 // Test command handling
