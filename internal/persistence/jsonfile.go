@@ -11,7 +11,7 @@ import (
 	"auction-site-go/internal/domain"
 )
 
-// ReadCommands reads commands from a JSON file
+// ReadCommands reads commands from a JSON file (legacy function, use Store interface instead)
 func ReadCommands(path string) ([]domain.Command, error) {
 	exists, err := fileExists(path)
 	if err != nil {
