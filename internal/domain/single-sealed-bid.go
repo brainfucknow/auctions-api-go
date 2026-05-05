@@ -54,7 +54,7 @@ func (s *SealedBidState) Increment(now time.Time) State {
 
 		// Sort bids by amount in descending order
 		sort.Slice(bids, func(i, j int) bool {
-			return bids[i].Amount.Value > bids[j].Amount.Value
+			return bids[i].Amount > bids[j].Amount
 		})
 
 		// Create new state with disclosing = true
@@ -129,9 +129,9 @@ func (s *SealedBidState) GetBids() []Bid {
 }
 
 // TryGetAmountAndWinner attempts to get the winning amount and bidder
-func (s *SealedBidState) TryGetAmountAndWinner() (Amount, UserId, bool) {
+func (s *SealedBidState) TryGetAmountAndWinner() (int64, UserId, bool) {
 	if !s.disclosing || len(s.bidsList) == 0 {
-		return Amount{}, "", false
+		return 0, "", false
 	}
 
 	highestBid := s.bidsList[0]

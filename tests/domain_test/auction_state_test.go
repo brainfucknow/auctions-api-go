@@ -19,8 +19,8 @@ var (
 	buyer1          = domain.NewBuyerOrSeller("Buyer_1", "Buyer 1")
 	buyer2          = domain.NewBuyerOrSeller("Buyer_2", "Buyer 2")
 	buyer3          = domain.NewBuyerOrSeller("Buyer_3", "Buyer 3")
-	bidAmount1      = domain.Amount{Currency: domain.SEK, Value: 10}
-	bidAmount2      = domain.Amount{Currency: domain.SEK, Value: 12}
+	bidAmount1      = int64(10)
+	bidAmount2      = int64(12)
 )
 
 // Helper function to parse time
@@ -69,7 +69,7 @@ func createBidLessThan2() domain.Bid {
 		ForAuction: sampleAuctionId,
 		Bidder:     buyer3,
 		At:         sampleStartsAt.Add(3 * time.Second),
-		Amount:     domain.Amount{Currency: domain.SEK, Value: 11},
+		Amount:     11,
 	}
 }
 
@@ -504,7 +504,7 @@ func testTimeFrameForTimedAscending(t *testing.T) {
 // Test command handling
 func TestCommandHandling(t *testing.T) {
 	// Create an auction
-	options := domain.DefaultTimedAscendingOptions(domain.SEK)
+	options := domain.DefaultTimedAscendingOptions()
 	auction := sampleAuctionOfType(domain.NewTimedAscendingType(options))
 	now := time.Now()
 
@@ -578,7 +578,7 @@ func TestCommandHandling(t *testing.T) {
 			ForAuction: auction.ID,
 			Bidder:     buyer1,
 			At:         sampleStartsAt.Add(time.Second),
-			Amount:     domain.Amount{Currency: domain.SEK, Value: 10},
+			Amount:     10,
 		}
 
 		cmd := domain.PlaceBidCommand{

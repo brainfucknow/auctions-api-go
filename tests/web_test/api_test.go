@@ -20,6 +20,13 @@ func TestAPI(t *testing.T) {
 		return fixedTime
 	}
 
+	// Command handler that just records events
+	var recordedCommands []domain.Command
+	onCommand := func(command domain.Command) error {
+		recordedCommands = append(recordedCommands, command)
+		return nil
+	}
+
 	// Event handler that just records events
 	var recordedEvents []domain.Event
 	onEvent := func(event domain.Event) error {
@@ -28,7 +35,7 @@ func TestAPI(t *testing.T) {
 	}
 
 	// Create app with empty repository
-	app := web.NewApp(domain.Repository{}, onEvent, getCurrentTime)
+	app := web.NewApp(domain.Repository{}, onCommand, onEvent, getCurrentTime)
 
 	// Define JWT headers
 	sellerJWT := "eyJzdWIiOiJhMSIsICJuYW1lIjoiVGVzdCIsICJ1X3R5cCI6IjAifQo="
@@ -45,7 +52,7 @@ func TestAPI(t *testing.T) {
 
 	// Test adding an auction
 	t.Run("AddAuction", func(t *testing.T) {
-		req, _ := http.NewRequest("POST", "/auction", bytes.NewBufferString(auctionReq))
+		req, _ := http.NewRequest("POST", "/auctions", bytes.NewBufferString(auctionReq))
 		req.Header.Set("x-jwt-payload", sellerJWT)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -81,7 +88,7 @@ func TestAPI(t *testing.T) {
 
 	// Test can't add same auction twice
 	t.Run("CantAddSameAuctionTwice", func(t *testing.T) {
-		req, _ := http.NewRequest("POST", "/auction", bytes.NewBufferString(auctionReq))
+		req, _ := http.NewRequest("POST", "/auctions", bytes.NewBufferString(auctionReq))
 		req.Header.Set("x-jwt-payload", sellerJWT)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -127,7 +134,7 @@ func TestAPI(t *testing.T) {
 
 	// Test get auction
 	t.Run("GetAuction", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/auction/1", nil)
+		req, _ := http.NewRequest("GET", "/auctions/1", nil)
 
 		// Execute request
 		rr := httptest.NewRecorder()
@@ -164,7 +171,7 @@ func TestAPI(t *testing.T) {
 	// Test place bid
 	t.Run("PlaceBid", func(t *testing.T) {
 		bidReq := `{"amount": 11}`
-		req, _ := http.NewRequest("POST", "/auction/1/bid", bytes.NewBufferString(bidReq))
+		req, _ := http.NewRequest("POST", "/auctions/1/bids", bytes.NewBufferString(bidReq))
 		req.Header.Set("x-jwt-payload", buyerJWT)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -197,14 +204,14 @@ func TestAPI(t *testing.T) {
 			t.Errorf("expected auction ID 1, got %d", bidAcceptedEvent.Bid.ForAuction)
 		}
 
-		if bidAcceptedEvent.Bid.Amount.Value != 11 {
-			t.Errorf("expected bid amount 11, got %d", bidAcceptedEvent.Bid.Amount.Value)
+		if bidAcceptedEvent.Bid.Amount != 11 {
+			t.Errorf("expected bid amount 11, got %d", bidAcceptedEvent.Bid.Amount)
 		}
 	})
 
 	// Test get auction with bids
 	t.Run("GetAuctionWithBids", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/auction/1", nil)
+		req, _ := http.NewRequest("GET", "/auctions/1", nil)
 
 		// Execute request
 		rr := httptest.NewRecorder()
@@ -226,8 +233,8 @@ func TestAPI(t *testing.T) {
 		if len(auction.Bids) != 1 {
 			t.Errorf("expected 1 bid, got %d", len(auction.Bids))
 		} else {
-			if auction.Bids[0].Amount.Value != 11 {
-				t.Errorf("expected bid amount 11, got %d", auction.Bids[0].Amount.Value)
+			if auction.Bids[0].Amount != 11 {
+				t.Errorf("expected bid amount 11, got %d", auction.Bids[0].Amount)
 			}
 
 			// Check bidder
@@ -240,7 +247,7 @@ func TestAPI(t *testing.T) {
 	// Test bid on non-existent auction
 	t.Run("BidOnNonExistentAuction", func(t *testing.T) {
 		bidReq := `{"amount": 10}`
-		req, _ := http.NewRequest("POST", "/auction/999/bid", bytes.NewBufferString(bidReq))
+		req, _ := http.NewRequest("POST", "/auctions/999/bids", bytes.NewBufferString(bidReq))
 		req.Header.Set("x-jwt-payload", buyerJWT)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -257,7 +264,7 @@ func TestAPI(t *testing.T) {
 	// Test seller cannot bid on own auction
 	t.Run("SellerCannotBidOnOwnAuction", func(t *testing.T) {
 		bidReq := `{"amount": 12}`
-		req, _ := http.NewRequest("POST", "/auction/1/bid", bytes.NewBufferString(bidReq))
+		req, _ := http.NewRequest("POST", "/auctions/1/bids", bytes.NewBufferString(bidReq))
 		req.Header.Set("x-jwt-payload", sellerJWT)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -279,7 +286,7 @@ func TestAPI(t *testing.T) {
 	// Test unauthorized access
 	t.Run("UnauthorizedAccess", func(t *testing.T) {
 		// Try to create an auction without JWT
-		req, _ := http.NewRequest("POST", "/auction", bytes.NewBufferString(auctionReq))
+		req, _ := http.NewRequest("POST", "/auctions", bytes.NewBufferString(auctionReq))
 		req.Header.Set("Content-Type", "application/json")
 
 		// Execute request

@@ -113,10 +113,6 @@ func (a Auction) ValidateBid(bid Bid) error {
 		return NewSellerCannotPlaceBidsError(bid.Bidder.ID, a.ID)
 	}
 
-	if bid.Amount.Currency != a.Currency {
-		return NewCurrencyConversionError(a.Currency)
-	}
-
 	return nil
 }
 
@@ -129,7 +125,7 @@ func (a Auction) CreateEmptyState() State {
 		options, err := ParseTimedAscendingOptions(a.Type.Options)
 		if err != nil {
 			// Fall back to default options if parsing fails
-			defaultOptions := DefaultTimedAscendingOptions(a.Currency)
+			defaultOptions := DefaultTimedAscendingOptions()
 			return NewTimedAscendingState(a.StartsAt, a.Expiry, defaultOptions)
 		}
 		return NewTimedAscendingState(a.StartsAt, a.Expiry, *options)

@@ -11,10 +11,10 @@ import (
 type TimedAscendingOptions struct {
 	// The seller has set a minimum sale price in advance (the 'reserve' price)
 	// If the final bid does not reach that price, the item remains unsold
-	ReservePrice Amount `json:"reservePrice"`
+	ReservePrice int64 `json:"reservePrice"`
 
 	// The minimum amount by which the next bid must exceed the current highest bid
-	MinRaise Amount `json:"minRaise"`
+	MinRaise int64 `json:"minRaise"`
 
 	// If no competing bidder challenges the standing bid within a given time frame,
 	// the standing bid becomes the winner
@@ -24,7 +24,7 @@ type TimedAscendingOptions struct {
 // String returns a string representation of the options
 func (o TimedAscendingOptions) String() string {
 	seconds := int(o.TimeFrame.Seconds())
-	return fmt.Sprintf("English|%s|%s|%d", o.ReservePrice.String(), o.MinRaise.String(), seconds)
+	return fmt.Sprintf("English|%d|%d|%d", o.ReservePrice, o.MinRaise, seconds)
 }
 
 // ParseTimedAscendingOptions parses a string into TimedAscendingOptions
@@ -36,13 +36,13 @@ func ParseTimedAscendingOptions(s string) (*TimedAscendingOptions, error) {
 	}
 
 	// Parse reserve price
-	reserveAmount, err := ParseAmount(parts[1])
+	reserveAmount, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid reserve price format: %s", parts[1])
 	}
 
 	// Parse min raise
-	minRaiseAmount, err := ParseAmount(parts[2])
+	minRaiseAmount, err := strconv.ParseInt(parts[2], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid min raise format: %s", parts[2])
 	}
@@ -54,17 +54,17 @@ func ParseTimedAscendingOptions(s string) (*TimedAscendingOptions, error) {
 	}
 
 	return &TimedAscendingOptions{
-		ReservePrice: *reserveAmount,
-		MinRaise:     *minRaiseAmount,
+		ReservePrice: reserveAmount,
+		MinRaise:     minRaiseAmount,
 		TimeFrame:    time.Duration(seconds) * time.Second,
 	}, nil
 }
 
-// DefaultTimedAscendingOptions creates default options for the given currency
-func DefaultTimedAscendingOptions(currency Currency) TimedAscendingOptions {
+// DefaultTimedAscendingOptions creates default options
+func DefaultTimedAscendingOptions() TimedAscendingOptions {
 	return TimedAscendingOptions{
-		ReservePrice: Amount{Currency: currency, Value: 0},
-		MinRaise:     Amount{Currency: currency, Value: 0},
+		ReservePrice: 0,
+		MinRaise:     0,
 		TimeFrame:    0,
 	}
 }
@@ -148,8 +148,8 @@ func (s *AwaitingStartState) GetBids() []Bid {
 }
 
 // TryGetAmountAndWinner attempts to get the winning amount and bidder
-func (s *AwaitingStartState) TryGetAmountAndWinner() (Amount, UserId, bool) {
-	return Amount{}, "", false
+func (s *AwaitingStartState) TryGetAmountAndWinner() (int64, UserId, bool) {
+	return 0, "", false
 }
 
 // HasEnded returns true if the auction has ended
@@ -202,13 +202,10 @@ func (s *OngoingState) AddBid(bid Bid) (State, error) {
 	minRaiseAmount := s.options.MinRaise
 
 	// Calculate minimum acceptable bid
-	minAcceptableBid, err := highestAmount.Add(minRaiseAmount)
-	if err != nil {
-		return s, err
-	}
+	minAcceptableBid := highestAmount + minRaiseAmount
 
 	// Changed comparison from <= to <, and using >= for the check
-	if bidAmount.Value >= minAcceptableBid.Value {
+	if bidAmount >= minAcceptableBid {
 		// Bid is acceptable
 		return &OngoingState{
 			bids:       append([]Bid{bid}, s.bids...),
@@ -226,8 +223,8 @@ func (s *OngoingState) GetBids() []Bid {
 }
 
 // TryGetAmountAndWinner attempts to get the winning amount and bidder
-func (s *OngoingState) TryGetAmountAndWinner() (Amount, UserId, bool) {
-	return Amount{}, "", false
+func (s *OngoingState) TryGetAmountAndWinner() (int64, UserId, bool) {
+	return 0, "", false
 }
 
 // HasEnded returns true if the auction has ended
@@ -252,19 +249,19 @@ func (s *EndedState) GetBids() []Bid {
 }
 
 // TryGetAmountAndWinner attempts to get the winning amount and bidder
-func (s *EndedState) TryGetAmountAndWinner() (Amount, UserId, bool) {
+func (s *EndedState) TryGetAmountAndWinner() (int64, UserId, bool) {
 	if len(s.bids) == 0 {
-		return Amount{}, "", false
+		return 0, "", false
 	}
 
 	highestBid := s.bids[0]
 
 	// Check if highest bid exceeds reserve price
-	if highestBid.Amount.Value > s.options.ReservePrice.Value {
+	if highestBid.Amount > s.options.ReservePrice {
 		return highestBid.Amount, highestBid.Bidder.ID, true
 	}
 
-	return Amount{}, "", false
+	return 0, "", false
 }
 
 // HasEnded returns true if the auction has ended

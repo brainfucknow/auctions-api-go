@@ -15,18 +15,20 @@ import (
 type App struct {
 	Router         *mux.Router
 	State          *AppState
+	OnCommand      func(domain.Command) error
 	OnEvent        func(domain.Event) error
 	GetCurrentTime func() time.Time
 }
 
 // NewApp creates a new web application
-func NewApp(repo domain.Repository, onEvent func(domain.Event) error, getCurrentTime func() time.Time) *App {
+func NewApp(repo domain.Repository, onCommand func(domain.Command) error, onEvent func(domain.Event) error, getCurrentTime func() time.Time) *App {
 	state := NewAppState(repo)
 	router := mux.NewRouter()
 
 	app := &App{
 		Router:         router,
 		State:          state,
+		OnCommand:      onCommand,
 		OnEvent:        onEvent,
 		GetCurrentTime: getCurrentTime,
 	}
@@ -45,9 +47,9 @@ func (a *App) setupRoutes() {
 
 	// Routes
 	a.Router.HandleFunc("/auctions", getAuctions(a.State)).Methods("GET")
-	a.Router.HandleFunc("/auction/{id}", getAuction(a.State)).Methods("GET")
-	a.Router.HandleFunc("/auction", createAuction(a.State, a.OnEvent, a.GetCurrentTime)).Methods("POST")
-	a.Router.HandleFunc("/auction/{id}/bid", placeBid(a.State, a.OnEvent, a.GetCurrentTime)).Methods("POST")
+	a.Router.HandleFunc("/auctions/{id}", getAuction(a.State)).Methods("GET")
+	a.Router.HandleFunc("/auctions", createAuction(a.State, a.OnCommand, a.OnEvent, a.GetCurrentTime)).Methods("POST")
+	a.Router.HandleFunc("/auctions/{id}/bids", placeBid(a.State, a.OnCommand, a.OnEvent, a.GetCurrentTime)).Methods("POST")
 }
 
 // Run starts the web server

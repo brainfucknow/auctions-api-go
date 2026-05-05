@@ -154,7 +154,7 @@ func TestAuctionTypeSerialization(t *testing.T) {
 	}
 
 	// Now test a timed ascending auction type
-	options := domain.DefaultTimedAscendingOptions(domain.VAC)
+	options := domain.DefaultTimedAscendingOptions()
 	auctionType := domain.NewTimedAscendingType(options)
 
 	// Marshal it
@@ -164,7 +164,7 @@ func TestAuctionTypeSerialization(t *testing.T) {
 	}
 
 	// The serialized type should contain "English"
-	if string(data) != `"English|VAC0|VAC0|0"` {
-		t.Errorf("Expected auction type to serialize as \"English|VAC0|VAC0|0\", got %s", string(data))
+	if string(data) != `"English|0|0|0"` {
+		t.Errorf("Expected auction type to serialize as \"English|0|0|0\", got %s", string(data))
 	}
 }

@@ -82,15 +82,14 @@ func (u *User) UnmarshalJSON(data []byte) error {
 type ErrorType string
 
 const (
-	ErrorUnknownAuction           ErrorType = "UnknownAuction"
-	ErrorAuctionAlreadyExists     ErrorType = "AuctionAlreadyExists"
-	ErrorAuctionHasEnded          ErrorType = "AuctionHasEnded"
-	ErrorAuctionHasNotStarted     ErrorType = "AuctionHasNotStarted"
-	ErrorSellerCannotPlaceBids    ErrorType = "SellerCannotPlaceBids"
-	ErrorCurrencyConversion       ErrorType = "CurrencyConversion"
-	ErrorInvalidUserData          ErrorType = "InvalidUserData"
-	ErrorMustPlaceBidOverHighest  ErrorType = "MustPlaceBidOverHighestBid"
-	ErrorAlreadyPlacedBid         ErrorType = "AlreadyPlacedBid"
+	ErrorUnknownAuction          ErrorType = "UnknownAuction"
+	ErrorAuctionAlreadyExists    ErrorType = "AuctionAlreadyExists"
+	ErrorAuctionHasEnded         ErrorType = "AuctionHasEnded"
+	ErrorAuctionHasNotStarted    ErrorType = "AuctionHasNotStarted"
+	ErrorSellerCannotPlaceBids   ErrorType = "SellerCannotPlaceBids"
+	ErrorInvalidUserData         ErrorType = "InvalidUserData"
+	ErrorMustPlaceBidOverHighest ErrorType = "MustPlaceBidOverHighestBid"
+	ErrorAlreadyPlacedBid        ErrorType = "AlreadyPlacedBid"
 )
 
 // DomainError represents an error in the domain
@@ -150,14 +149,6 @@ func NewSellerCannotPlaceBidsError(userId UserId, auctionId AuctionId) error {
 	}
 }
 
-// NewCurrencyConversionError creates a new CurrencyConversion error
-func NewCurrencyConversionError(currency Currency) error {
-	return DomainError{
-		Type: ErrorCurrencyConversion,
-		Data: currency,
-	}
-}
-
 // NewInvalidUserDataError creates a new InvalidUserData error
 func NewInvalidUserDataError(message string) error {
 	return DomainError{
@@ -167,7 +158,7 @@ func NewInvalidUserDataError(message string) error {
 }
 
 // NewMustPlaceBidOverHighestError creates a new MustPlaceBidOverHighest error
-func NewMustPlaceBidOverHighestError(amount Amount) error {
+func NewMustPlaceBidOverHighestError(amount int64) error {
 	return DomainError{
 		Type: ErrorMustPlaceBidOverHighest,
 		Data: amount,

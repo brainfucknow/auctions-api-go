@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -70,7 +71,7 @@ func getAuction(state *AppState) http.HandlerFunc {
 
 		// Get winner information
 		var winner *domain.UserId
-		var winnerPrice *domain.Amount
+		var winnerPrice *int64
 		if amount, userId, found := auctionState.TryGetAmountAndWinner(); found {
 			winner = &userId
 			winnerPrice = &amount
@@ -93,7 +94,7 @@ func getAuction(state *AppState) http.HandlerFunc {
 }
 
 // createAuction creates a new auction
-func createAuction(state *AppState, onEvent func(domain.Event) error, getCurrentTime func() time.Time) http.HandlerFunc {
+func createAuction(state *AppState, onCommand func(domain.Command) error, onEvent func(domain.Event) error, getCurrentTime func() time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse request body
 		var req AddAuctionRequest
@@ -115,7 +116,7 @@ func createAuction(state *AppState, onEvent func(domain.Event) error, getCurrent
 			auctionType = req.Type
 		} else {
 			// Default to English auction
-			options := domain.DefaultTimedAscendingOptions(req.Currency)
+			options := domain.DefaultTimedAscendingOptions()
 			auctionType = domain.NewTimedAscendingType(options)
 		}
 
@@ -133,6 +134,12 @@ func createAuction(state *AppState, onEvent func(domain.Event) error, getCurrent
 		cmd := domain.AddAuctionCommand{
 			Time:    getCurrentTime(),
 			Auction: auction,
+		}
+
+		if err := onCommand(cmd); err != nil {
+			log.Printf("Failed to observe command: %v", err)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
+			return
 		}
 
 		// Handle command
@@ -156,9 +163,9 @@ func createAuction(state *AppState, onEvent func(domain.Event) error, getCurrent
 
 		// Call event handler
 		if err := onEvent(event); err != nil {
-			// Log the error but continue
-			// In a real application, this should be properly handled
-			// For now, just return success to the client
+			log.Printf("Failed to observe event: %v", err)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
+			return
 		}
 
 		// Return the event
@@ -167,7 +174,7 @@ func createAuction(state *AppState, onEvent func(domain.Event) error, getCurrent
 }
 
 // placeBid places a bid on an auction
-func placeBid(state *AppState, onEvent func(domain.Event) error, getCurrentTime func() time.Time) http.HandlerFunc {
+func placeBid(state *AppState, onCommand func(domain.Command) error, onEvent func(domain.Event) error, getCurrentTime func() time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse auction ID from path
 		vars := mux.Vars(r)
@@ -192,26 +199,32 @@ func placeBid(state *AppState, onEvent func(domain.Event) error, getCurrentTime 
 			return
 		}
 
-		// Get auction from repository
-		repo := state.GetRepository()
-		entry, ok := repo[domain.AuctionId(id)]
-		if !ok {
-			respondError(w, http.StatusNotFound, "Auction not found")
-			return
-		}
-
 		// Create bid
 		bid := domain.Bid{
 			ForAuction: domain.AuctionId(id),
 			Bidder:     user,
 			At:         getCurrentTime(),
-			Amount:     domain.Amount{Currency: entry.Auction.Currency, Value: req.Amount},
+			Amount:     req.Amount,
 		}
 
 		// Create command
 		cmd := domain.PlaceBidCommand{
 			Time: getCurrentTime(),
 			Bid:  bid,
+		}
+
+		if err := onCommand(cmd); err != nil {
+			log.Printf("Failed to observe command: %v", err)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+
+		// Get auction from repository
+		repo := state.GetRepository()
+		_, ok := repo[domain.AuctionId(id)]
+		if !ok {
+			respondError(w, http.StatusNotFound, "Auction not found")
+			return
 		}
 
 		// Handle command
@@ -234,7 +247,9 @@ func placeBid(state *AppState, onEvent func(domain.Event) error, getCurrentTime 
 
 		// Call event handler
 		if err := onEvent(event); err != nil {
-			// Log the error but continue
+			log.Printf("Failed to observe event: %v", err)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
+			return
 		}
 
 		// Return the event

@@ -24,7 +24,6 @@ func DecodeJwtUser(jwtPayload string) (domain.User, error) {
 		// Add padding if necessary
 		padding := 4 - len(payload)%4
 		jwtPayload += strings.Repeat("=", padding)
-		payload = []byte(jwtPayload)
 	}
 
 	decoded, err := base64.StdEncoding.DecodeString(jwtPayload)

@@ -17,7 +17,7 @@ func TestCommandAndEventSerialization(t *testing.T) {
 	buyer := domain.NewBuyerOrSeller("buyer1", "Buyer 1")
 
 	// Create auction type
-	options := domain.DefaultTimedAscendingOptions(domain.VAC)
+	options := domain.DefaultTimedAscendingOptions()
 	auctionType := domain.NewTimedAscendingType(options)
 
 	// Create auction
@@ -36,7 +36,7 @@ func TestCommandAndEventSerialization(t *testing.T) {
 		ForAuction: auctionId,
 		Bidder:     buyer,
 		At:         now.Add(time.Hour),
-		Amount:     domain.Amount{Currency: domain.VAC, Value: 10},
+		Amount:     10,
 	}
 
 	// Test AddAuctionCommand serialization

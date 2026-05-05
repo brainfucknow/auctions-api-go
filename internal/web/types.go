@@ -91,8 +91,8 @@ func (r *AddAuctionRequest) UnmarshalJSON(data []byte) error {
 
 // AuctionBidResponse represents a bid in an auction response
 type AuctionBidResponse struct {
-	Amount domain.Amount `json:"amount"`
-	Bidder domain.User   `json:"bidder"`
+	Amount int64       `json:"amount"`
+	Bidder domain.User `json:"bidder"`
 }
 
 // AuctionResponse represents an auction with bids and winner information
@@ -104,7 +104,7 @@ type AuctionResponse struct {
 	Currency    domain.Currency      `json:"currency"`
 	Bids        []AuctionBidResponse `json:"bids"`
 	Winner      *domain.UserId       `json:"winner"`
-	WinnerPrice *domain.Amount       `json:"winnerPrice"`
+	WinnerPrice *int64               `json:"winnerPrice"`
 }
 
 // AuctionListItem represents an auction in a list
